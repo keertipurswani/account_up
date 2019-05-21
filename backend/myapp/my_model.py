@@ -1,6 +1,11 @@
 from django.db import connections
 from passlib.hash import sha256_crypt
 
+SALES = 1
+PURCHASE = 2
+PAYMENT = 3
+RECEIPT = 4
+
 def add_new_user(kwargs):
     '''
 
@@ -23,7 +28,6 @@ def add_new_user(kwargs):
             NOW() ) ;
     '''
 
-    print(query % (kwargs['username'], sha256_crypt.encrypt(kwargs['password'])))
     cursor.execute(query, (kwargs['username'], sha256_crypt.encrypt(kwargs['password'])))
     connection.commit()
 
@@ -56,7 +60,6 @@ def validate_login_user(kwargs):
 
     if cursor.rowcount > 0:
         res = cursor.fetchall()
-        print(res[0][0])
         return res[0][0]
 
     return 0
@@ -895,7 +898,7 @@ def add_transaction(kwargs):
 
     transaction_id = cursor.lastrowid
 
-    print("transaction_id : ", transaction_id)
+    # print("transaction_id : ", transaction_id)
 
     for each_item in kwargs['item_details']:
         query = '''
@@ -915,16 +918,46 @@ def add_transaction(kwargs):
                     ( %s, %s, %s,  %s, %s, %s, %s,  NOW()) ;
             '''
 
+        each_item['item_id'] = int(each_item['item_id']) if each_item['item_id'] else None
+        each_item['item_quantity'] = int(each_item['item_quantity']) if each_item['item_quantity'] else None
+        each_item['item_base_price'] = float(each_item['item_base_price']) if each_item['item_base_price'] else None
+        each_item['item_tax_percent'] = float(each_item['item_tax_percent']) if each_item['item_tax_percent'] else None
+        each_item['item_total_price'] = float(each_item['item_total_price']) if each_item['item_total_price'] else None
+
         cursor.execute(query, (int(kwargs['companyId']),
                                transaction_id,
-                               int(each_item['item_id']),
-                               float(each_item['item_base_price']),
-                               int(each_item['item_quantity']),
-                               float(each_item['item_tax_percent']),
-                               float(each_item['item_total_price'])
+                               each_item['item_id'],
+                               each_item['item_base_price'],
+                               each_item['item_quantity'],
+                               each_item['item_tax_percent'],
+                               each_item['item_total_price']
                                ))
 
         connection.commit()
+
+        # update item quantity in item master table
+        if each_item['item_quantity']:
+            item_query = ''
+            if kwargs['transaction_type'] == PURCHASE:
+                item_query = '''
+                    UPDATE 
+                        TBL_ACCOUNTUP_ITEMS AS TAI 
+                    SET
+                        TAI.`FLD_QUANTITY` = TAI.`FLD_QUANTITY` + %s 
+                    WHERE TAI.`FLD_ITEM_INST_ID` = %s ;
+                '''
+            elif kwargs['transaction_type'] == SALES:
+                item_query = '''
+                    UPDATE 
+                        TBL_ACCOUNTUP_ITEMS AS TAI 
+                    SET
+                        TAI.`FLD_QUANTITY` = TAI.`FLD_QUANTITY` - %s 
+                    WHERE TAI.`FLD_ITEM_INST_ID` = %s ;
+                '''
+
+            cursor.execute(item_query, (each_item['item_quantity'], each_item['item_id'])  )
+            connection.commit()
+
 
     if kwargs['transaction_pay_now'] == 1:
         for each_payment in kwargs['payment_details']:
@@ -943,17 +976,21 @@ def add_transaction(kwargs):
                     FLD_ADDED_DATETIME
                 ) 
                 VALUES
-                    ( %s, %s, %s, %s, %s, %s, %s, %s, NOW()) ;
+                    ( %s, %s, %s,   %s, %s, %s,   %s, %s, NOW()) ;
                 '''
+
+            each_payment['payment_method'] = int(each_payment['payment_method']) if each_payment['payment_method'] else None
+            each_payment['payment_amount'] = float(each_payment['payment_amount']) if each_payment['payment_amount'] else None
+            each_payment['payment_id'] = float(each_payment['payment_id']) if each_payment['payment_id'] else None
 
             cursor.execute(query, (int(kwargs['companyId']),
                                    transaction_id,
                                    kwargs['transaction_total_price'],
 
-                                   int(each_payment['payment_method']),
-                                   float(each_payment['payment_amount']),
+                                   each_payment['payment_method'],
+                                   each_payment['payment_amount'],
                                    each_payment['payment_date'],
-                                   float(each_payment['payment_id']),
+                                   each_payment['payment_id'],
                                    each_payment['payment_remarks']
                                    ))
 

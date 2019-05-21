@@ -16,6 +16,7 @@ def home(request):
 
 
 def index(request):
+    # print("hello")
     return HttpResponse('Hello, I am at Index!')
 
 
@@ -44,8 +45,6 @@ def create_user(request):
         company = dict()
         company['username'] = request_body_dict.get('username', '')
         company['password'] = request_body_dict.get('password', '')
-
-        print(company)
 
         if not company['username'] or not company['password']:
             raise Exception("Invalid data")
@@ -699,7 +698,7 @@ def add_transaction(request):
         company['item_details'] = request_body_dict.get('item_details', '')
         company['payment_details'] = request_body_dict.get('payment_details', '')
 
-        print(company['payment_details'])
+        # print(company['payment_details'])
         if not company['companyId']:
             raise Exception("Invalid data")
 
